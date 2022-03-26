@@ -19,7 +19,7 @@ pipeline {
 		}
         stage("Build :latest image") {
             steps {
-                build job: "../backend/service_temp/builder",  
+                build job: "./backend/service_temp/builder",  
 			    parameters: [string(name: 'TAG', value: 'latest')]
 				echo " =========== собирается образ latest"
 			}
