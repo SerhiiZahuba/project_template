@@ -1,45 +1,36 @@
 node {
-    git url: 'https://github.com/jfrogdev/project-examples.git'
+    def server
+    def rtDocker
+    def buildInfo
 
-    // Get Artifactory server instance, defined in the Artifactory Plugin administration page.
-    def server = Artifactory.server "SERVER_ID"
+    stage ('Clone') {
+        git url: 'https://github.com/jfrog/project-examples.git'
+    }
 
-    // Read the upload spec and upload files to Artifactory.
-    def downloadSpec =
-            '''{
-            "files": [
-                {
-                    "pattern": "libs-snapshot-local/*.zip",
-                    "target": "dependencies/",
-                    "props": "p1=v1;p2=v2"
-                }
-            ]
-        }'''
+    stage ('Artifactory configuration') {
+        // Obtain an Artifactory server instance, defined in Jenkins --> Manage Jenkins --> Configure System:
+        server = Artifactory.server SERVER_ID
+        // Host:
+        // On OSX: "tcp://127.0.0.1:1234"
+        // On Linux can be omitted or null
+        rtDocker = Artifactory.docker server: server, host: HOST_NAME
+        buildInfo = Artifactory.newBuildInfo()
+    }
 
-    def buildInfo1 = server.download spec: downloadSpec
+    stage ('Add properties') {
+        // Attach custom properties to the published artifacts:
+        rtDocker.addProperty("project-name", "docker1").addProperty("status", "stable")
+    }
 
-    // Read the upload spec which was downloaded from github.
-    def uploadSpec =
-            '''{
-            "files": [
-                {
-                    "pattern": "resources/Kermit.*",
-                    "target": "libs-snapshot-local",
-                    "props": "p1=v1;p2=v2"
-                },
-                {
-                    "pattern": "resources/Frogger.*",
-                    "target": "libs-snapshot-local"
-                }
-            ]
-        }'''
+    stage ('Build docker image') {
+        docker.build(ARTIFACTORY_DOCKER_REGISTRY + '/hello-world:latest', 'jenkins-examples/pipeline-examples/resources')
+    }
 
-    // Upload to Artifactory.
-    def buildInfo2 = server.upload spec: uploadSpec
+    stage ('Push image to Artifactory') {
+        rtDocker.push ARTIFACTORY_DOCKER_REGISTRY + '/hello-world:latest', 'docker-local', buildInfo
+    }
 
-    // Merge the upload and download build-info objects.
-    buildInfo1.append buildInfo2
-
-    // Publish the build to Artifactory
-    server.publishBuildInfo buildInfo1
+    stage ('Publish build info') {
+        server.publishBuildInfo buildInfo
+    }
 }
